@@ -1,0 +1,5 @@
+/.vscode
+/backend
+/bash.exe.stackdump
+/node_modules
+.vercel
