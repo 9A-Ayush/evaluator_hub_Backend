@@ -1,36 +1,32 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path');
 const dotenv = require('dotenv');
+const path = require('path');
 
 // Load environment variables
-dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config();
 
 const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-    origin: '*', // Allow all origins temporarily for testing
+    origin: '*', // Allow all origins for testing; restrict in production
     credentials: true
 }));
 
-// Serve static files from the root directory
-app.use(express.static(path.join(__dirname, '..')));
-
-// Add request logging middleware
+// Simple request logger
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     if (req.method === 'POST') {
-        console.log('Request headers:', req.headers);
-        console.log('Request body:', req.body);
+        console.log('Headers:', req.headers);
+        console.log('Body:', req.body);
     }
     next();
 });
 
-// Routes
+// API Routes
 const userRoutes = require('./routes/userRoutes');
 const evaluationRoutes = require('./routes/evaluationRoutes');
 const assetRoutes = require('./routes/assetRoutes');
@@ -41,65 +37,53 @@ app.use('/api/evaluations', evaluationRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/reports', reportRoutes);
 
-// Serve index.html for the root route
+// 404 for unknown API routes
+app.all('/api/*', (req, res) => {
+    res.status(404).json({ message: 'API endpoint not found' });
+});
+
+// Optional: basic root route for testing
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+    res.send('✅ API is live!');
 });
 
-// Handle all other routes by serving index.html
-app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) {
-        res.status(404).json({ message: 'API endpoint not found' });
-    } else {
-        res.sendFile(path.join(__dirname, '..', req.path));
-    }
-});
-
-// Connect to MongoDB
+// MongoDB Connection
 let cachedDb = null;
-
 const connectToMongo = async () => {
     if (cachedDb) return cachedDb;
-
     const client = await mongoose.connect(process.env.MONGODB_URI, {
         useNewUrlParser: true,
         useUnifiedTopology: true,
         serverSelectionTimeoutMS: 5000
     });
-
     cachedDb = client;
     return client;
 };
 
-// Connect to MongoDB
 connectToMongo()
-    .then(() => console.log('Connected to MongoDB successfully'))
-    .catch(err => console.error('MongoDB connection error:', err));
+    .then(() => console.log('✅ Connected to MongoDB successfully'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Error handling
-process.on('uncaughtException', (err) => {
+// Error Handling
+app.use((err, req, res, next) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+});
+
+process.on('uncaughtException', err => {
     console.error('Uncaught Exception:', err);
     process.exit(1);
 });
 
-process.on('unhandledRejection', (err) => {
+process.on('unhandledRejection', err => {
     console.error('Unhandled Rejection:', err);
     process.exit(1);
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({
-        success: false,
-        message: err.message || 'Internal server error'
-    });
-});
-
-// Start server — 🔥 always runs, no matter the environment
+// Start Server
 const PORT = process.env.PORT || 5003;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🔥 Backend running on port ${PORT}`);
 });
 
 module.exports = app;
